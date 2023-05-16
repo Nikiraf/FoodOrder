@@ -9,7 +9,7 @@ import Foundation
 import UIKit
 
 final class OrderViewModel {
-  private (set) var orders: [Order] = []
+  private (set) var ordersFullList: [Order] = [] // does not contains deliveredOrders
   private (set) var filteredOrders: [Order]?
   var deliveredOrders: [Order] = []
   
@@ -21,7 +21,7 @@ final class OrderViewModel {
   
   var activeOrders: [Order] {
     guard let filteredOrders = filteredOrders else {
-      return orders
+      return ordersFullList
     }
     return filteredOrders
   }
@@ -31,14 +31,15 @@ final class OrderViewModel {
   }
   
   func placeOrder(name: String) {
-    guard orders.count < maxNumberOfTotalOrders else {
+    guard ordersFullList.count < maxNumberOfTotalOrders else {
       self.showError?(String(format: ErrorState.maximumNumbersOfOrdersReached.rawValue, maxNumberOfTotalOrders))
       return
     }
     
     // Order id should be unique number that will handle database. For the task purpose it id done this way
-    let order = Order(id: (orders.count+deliveredOrders.count) + 1, name: name, state: .new)
-    orders.append(order)
+    let a = ordersFullList.count+deliveredOrders.count + 1
+    let order = Order(id: a, name: name, state: .new)
+    ordersFullList.append(order)
   }
   
   func changeOrderState(_ order: Order) {
@@ -51,18 +52,18 @@ final class OrderViewModel {
   }
   
   func switchToNextState(for order: Order) {
-    guard let index = orders.firstIndex(where: { $0.id == order.id }) else {
+    guard let index = ordersFullList.firstIndex(where: { $0.id == order.id }) else {
       return
     }
     
     switch order.state {
     case .new:
-      orders[index].state = .preparing
+      ordersFullList[index].state = .preparing
     case .preparing:
-      orders[index].state = .ready
+      ordersFullList[index].state = .ready
     case .ready:
-      orders[index].state = .delivered
-      deliveredOrders.append(orders[index])
+      ordersFullList[index].state = .delivered
+      deliveredOrders.append(ordersFullList[index])
       DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
         self.removeDeliveredOrder(order)
       }
@@ -73,7 +74,7 @@ final class OrderViewModel {
   }
   
   func changeStateError(_ order: Order) -> ErrorState? {
-    let previousOrders = orders.filter({$0.createDate < order.createDate})
+    let previousOrders = ordersFullList.filter({$0.createDate < order.createDate})
     
     let previousOrdersAreProcessed = previousOrders.allSatisfy{ $0.state.rawValue > order.state.rawValue }
     
@@ -83,7 +84,7 @@ final class OrderViewModel {
     }
     
     // Check if number of prepairing orders queue is full
-    let ordersInPrepairingState: [Order] = orders.filter({$0.state == .preparing})
+    let ordersInPrepairingState: [Order] = ordersFullList.filter({$0.state == .preparing && $0.id != order.id})
     
     if ordersInPrepairingState.count == maxNumberOfThePrepairingOrders {
       return .prepairingOrdersQueueIsFull
@@ -94,10 +95,10 @@ final class OrderViewModel {
   }
   
   private func removeDeliveredOrder(_ order: Order) {
-    guard let orderIndex = orders.firstIndex(where: { $0.id == order.id }) else {
+    guard let orderIndex = ordersFullList.firstIndex(where: { $0.id == order.id }) else {
       return
     }
-    orders.remove(at: orderIndex)
+    ordersFullList.remove(at: orderIndex)
     
     // Remove delivered order from the searches orders as well
     if let deliveredOrderIndex = filteredOrders?.firstIndex(where: { $0.id == order.id }) {
@@ -108,6 +109,6 @@ final class OrderViewModel {
   }
   
   func searchOrders(query: String) -> [Order] {
-    return orders.filter { $0.name.contains(query) || String($0.id).contains(query) }
+    return ordersFullList.filter { $0.name.contains(query) || String($0.id).contains(query) }
   }
 }

@@ -49,7 +49,6 @@ class HomeViewController: UIViewController {
     let button = UIButton(type: .system)
     button.setTitle("Place Order", for: .normal)
     button.addTarget(self, action: #selector(placeOrderButtonTapped), for: .touchUpInside)
-//    button.configuration = .filled()
     button.translatesAutoresizingMaskIntoConstraints = false
     
     return button
@@ -115,17 +114,19 @@ class HomeViewController: UIViewController {
       placeOrderButton.heightAnchor.constraint(equalToConstant: 50)
     ])
     
-    let tapGesture = UITapGestureRecognizer(target: self, action: #selector(openOrderDetails(_:)))
-    stackView.addGestureRecognizer(tapGesture)
-    stackView.isUserInteractionEnabled = true
-    
     searchBar.delegate = self
   }
   
-  private func createOrderView(_ order: Order) -> UIView {
+  private func createOrderView(_ order: Order, _ disableNextButtonState: Bool) -> UIView {
     let view = UIView()
+    
     view.backgroundColor = .lightGray
     view.layer.cornerRadius = 8
+    
+    view.tag = order.id
+    let tapGesture = UITapGestureRecognizer(target: self, action: #selector(openOrderDetails(_:)))
+    view.addGestureRecognizer(tapGesture)
+    view.isUserInteractionEnabled = true
     
     let nameLabel = UILabel()
     nameLabel.text = "\(order.name)"
@@ -148,7 +149,6 @@ class HomeViewController: UIViewController {
     nextStateButton.setTitle("Next State", for: .normal)
     nextStateButton.addTarget(self, action: #selector(nextStateButtonTapped(_:)), for: .touchUpInside)
     nextStateButton.tag = order.id
-    stackView.tag = order.id
     
     let stackView = UIStackView(arrangedSubviews: [labelsStack, nextStateButton])
     stackView.axis = .vertical
@@ -166,13 +166,14 @@ class HomeViewController: UIViewController {
     
     nameLabel.layoutIfNeeded()
     stackView.layoutIfNeeded()
-    
+
     nextStateButton.isEnabled = order.state != .delivered
+    nextStateButton.isHidden = disableNextButtonState
     
     return view
   }
   
-  private func reloadOrderList() {
+  private func reloadOrderList(_ disableNextButtonState: Bool = false) {
     // Clear the order list stack view
     orderListStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
     
@@ -180,7 +181,7 @@ class HomeViewController: UIViewController {
     
     // Rebuild the order views
     for order in viewModel.activeOrders {
-      let orderView = createOrderView(order)
+      let orderView = createOrderView(order, disableNextButtonState)
       orderListStackView.addArrangedSubview(orderView)
     }
     
@@ -218,7 +219,7 @@ class HomeViewController: UIViewController {
   
   @objc private func nextStateButtonTapped(_ sender: UIButton) {
     let orderId = sender.tag
-    if let order = viewModel.activeOrders.first(where: { $0.id == orderId }) {
+    if let order = viewModel.ordersFullList.first(where: { $0.id == orderId }) {
       changeOrderState(order)
     }
   }
@@ -229,7 +230,7 @@ class HomeViewController: UIViewController {
 extension HomeViewController {
   @objc private func openOrderDetails(_ gesture: UITapGestureRecognizer) {
     guard let orderID = gesture.view?.tag,
-          let order = viewModel.activeOrders.first(where: { $0.id == orderID }) else {
+          let order = viewModel.ordersFullList.first(where: { $0.id == orderID }) else {
       showAlert(title: "Error", text: "Order details not available")
       return
     }
@@ -251,7 +252,8 @@ extension HomeViewController {
 extension HomeViewController: UISearchBarDelegate {
   func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
     let text = searchText.lowercased()
-    var filteredOrders: [Order]? = viewModel.activeOrders.filter { order in
+    
+    var filteredOrders: [Order]? = viewModel.ordersFullList.filter { order in
       return (order.name.lowercased().contains(text) || text == String(order.id))
     }
     if text.isEmpty {
@@ -259,15 +261,7 @@ extension HomeViewController: UISearchBarDelegate {
     }
     viewModel.addFilteredOrders(filteredOrders)
     
-    reloadOrderList()
+    reloadOrderList(filteredOrders == nil ? false : true)
   }
- 
-//  func searchBarTextDidEndEditing(_ searchBar: UISearchBar) {
-//    print("End")
-//  }
-//
-//  func searchBarTextDidBeginEditing(_ searchBar: UISearchBar) {
-//    print("Start")
-//  }
   
 }
